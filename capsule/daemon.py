@@ -18,7 +18,7 @@ from .watcher import FileWatcher, IDLE_SECONDS
 
 def _snapshot_callback(filepath: str):
     """Called when a file has been idle long enough to snapshot."""
-    from .narrator import generate_message as gen_msg
+    from .narrator import generate_message as gen_msg, get_active_window_title
 
     store = TimelineStore()
     repo = git_ops.ensure_repo()
@@ -29,6 +29,9 @@ def _snapshot_callback(filepath: str):
 
     with open(filepath, "rb") as f:
         current_content = f.read().decode("utf-8", errors="replace")
+
+    # Capture active window title for context
+    window_title = get_active_window_title()
 
     # Get previous snapshot content and message for context
     branch = git_ops._branch_name(filepath)
@@ -53,6 +56,7 @@ def _snapshot_callback(filepath: str):
         current_content=current_content,
         previous_content=previous_content,
         previous_message=previous_message,
+        window_title=window_title,
     )
 
     # Snapshot to git
@@ -66,7 +70,7 @@ def _rename_callback(old_path: str, new_path: str):
     """Called when a file is renamed/moved.
     Continues the snapshot history on the same branch.
     """
-    from .narrator import generate_message as gen_msg
+    from .narrator import generate_message as gen_msg, get_active_window_title
 
     store = TimelineStore()
     repo = git_ops.ensure_repo()
@@ -74,6 +78,8 @@ def _rename_callback(old_path: str, new_path: str):
     old_name = os.path.basename(old_path)
     new_name = os.path.basename(new_path)
     message = f"Renamed {old_name} to {new_name}"
+
+    window_title = get_active_window_title()
 
     if os.path.isfile(new_path):
         with open(new_path, "rb") as f:
@@ -94,6 +100,7 @@ def _rename_callback(old_path: str, new_path: str):
             current_content=current_content,
             previous_content=None,
             previous_message=previous_message,
+            window_title=window_title,
         )
         message = f"{message} — {narrative}"
 
@@ -174,6 +181,10 @@ def main():
         help="Directories to watch (default: current directory)",
     )
     parser.add_argument(
+        "--desktop", action="store_true",
+        help="Watch the Desktop directory",
+    )
+    parser.add_argument(
         "--idle", type=int, default=IDLE_SECONDS,
         help=f"Idle seconds before snapshot (default: {IDLE_SECONDS})",
     )
@@ -207,6 +218,19 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Resolve --desktop to the user's desktop path
+    if args.desktop:
+        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+        if not os.path.isdir(desktop):
+            # Try OneDrive variant
+            onedrive = os.path.join(os.path.expanduser("~"), "OneDrive", "Desktop")
+            if os.path.isdir(onedrive):
+                desktop = onedrive
+        if args.paths == ["."]:
+            args.paths = [desktop]
+        else:
+            args.paths.append(desktop)
 
     if args.browse:
         from .tui import run_browser
@@ -255,6 +279,8 @@ def main():
 
         import subprocess
         cmd = [sys.executable, "-m", "capsule.daemon", "--_bg"]
+        if args.desktop:
+            cmd.append("--desktop")
         for p in args.paths:
             cmd.append(p)
         cmd.extend(["--idle", str(args.idle)])

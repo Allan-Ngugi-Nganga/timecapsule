@@ -53,6 +53,20 @@ def _ollama_generate(model: str, prompt: str, timeout: int = 30) -> Optional[str
 
 # Template message generators (fallback when no LLM available)
 
+def get_active_window_title() -> Optional[str]:
+    """Get the title of the currently active window.
+    Uses pygetwindow (cross-platform). Returns None if unavailable.
+    """
+    try:
+        import pygetwindow as gw
+        active = gw.getActiveWindow()
+        if active:
+            return active.title
+    except Exception:
+        pass
+    return None
+
+
 SNAPSHOT_TEMPLATES = [
     "Modified {filename}",
     "Updated {filename}",
@@ -100,6 +114,7 @@ def _template_message(filepath: str, diff: str) -> str:
 def generate_message(filepath: str, current_content: str,
                      previous_content: Optional[str] = None,
                      previous_message: Optional[str] = None,
+                     window_title: Optional[str] = None,
                      model: str = "qwen2.5-coder:1.5b") -> str:
     """Generate a narrative commit message for a file change.
 
@@ -110,6 +125,7 @@ def generate_message(filepath: str, current_content: str,
         current_content: The file's current contents.
         previous_content: The file's contents at last snapshot (if any).
         previous_message: The previous commit message (for continuity).
+        window_title: Title of the active window when the snapshot was taken.
         model: Ollama model to use.
 
     Returns:
@@ -119,7 +135,10 @@ def generate_message(filepath: str, current_content: str,
 
     # If no previous version, it's a first snapshot
     if previous_content is None:
-        return f"Initial snapshot of {filename}"
+        msg = f"Initial snapshot of {filename}"
+        if window_title:
+            msg += f" — working in {window_title}"
+        return msg
 
     # Generate a simple diff summary
     diff_lines = []
@@ -146,6 +165,8 @@ def generate_message(filepath: str, current_content: str,
     context_parts = []
     if previous_message and previous_message != template_msg:
         context_parts.append(f"Previous change: {previous_message}")
+    if window_title:
+        context_parts.append(f"Active window: {window_title}")
 
     context = " ".join(context_parts)
     if context:
