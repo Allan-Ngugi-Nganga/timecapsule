@@ -1,0 +1,17 @@
+[project]
+name = "timecapsule"
+version = "0.1.0"
+description = "A git-like filesystem that automatically creates narrative commits."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "watchdog>=4.0.0",
+    "gitpython>=3.1.0",
+    "textual>=0.41.0",
+]
+
+[project.scripts]
+timecapsule = "capsule.daemon:main"
+
+[tool.setuptools.packages.find]
+include = ["capsule*"]
