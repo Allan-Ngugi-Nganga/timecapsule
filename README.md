@@ -1,4 +1,4 @@
-<h1 align="center">🕰️ timecapsule</h1>
+<h1 align="center">timecapsule</h1>
 <p align="center">
   <em>A git-like filesystem that automatically creates narrative commits.</em>
   <br>
