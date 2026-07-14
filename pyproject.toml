@@ -1,5 +1,5 @@
 [project]
-name = "timecapsule"
+name = "capsule-narrative"
 version = "0.1.0"
 description = "A git-like filesystem that automatically creates narrative commits."
 readme = "README.md"

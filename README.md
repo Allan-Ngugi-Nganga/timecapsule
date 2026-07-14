@@ -26,7 +26,7 @@ Over time, you get a searchable, browsable timeline of your work. Each file's hi
 ## Quick Start
 
 ```bash
-pip install timecapsule
+pip install capsule-narrative
 timecapsule
 ```
 
@@ -114,3 +114,5 @@ MIT
 ---
 
 *Every file has a story.*
+
+<!-- test edit for timecapsule end-to-end -->
