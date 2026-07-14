@@ -102,6 +102,9 @@ def _rename_callback(old_path: str, new_path: str):
         if hexsha:
             store.record_snapshot(new_path, hexsha, message, branch)
             print(f"[rename] {old_name} → {new_name}", flush=True)
+
+
+def watch(paths: list[str], idle: int = IDLE_SECONDS, foreground: bool = True, once: bool = False):
     """Start the file watcher and run until interrupted."""
     print(f"🕰️  timecapsule watching: {', '.join(paths)}")
     print(f"   idle threshold: {idle}s | snapshots: ~/.capsule/timecapsule")
@@ -186,6 +189,22 @@ def main():
         "--status", action="store_true",
         help="Show capsule stats and exit",
     )
+    parser.add_argument(
+        "--daemon", action="store_true",
+        help="Run in background (daemon mode)",
+    )
+    parser.add_argument(
+        "--stop", action="store_true",
+        help="Stop the background daemon",
+    )
+    parser.add_argument(
+        "--log", type=str, default=None,
+        help="Log file for daemon output",
+    )
+    parser.add_argument(
+        "--_bg", action="store_true",
+        help=argparse.SUPPRESS,
+    )
 
     args = parser.parse_args()
 
@@ -204,6 +223,61 @@ def main():
         print(f"   snapshots: {count}")
         print(f"   tracked files: {files}")
         print(f"   repository: {repo_path}")
+        return
+
+    if args.daemon or args.stop:
+        pid_path = git_ops.CAPSULE_DIR / "daemon.pid"
+
+        if args.stop:
+            if pid_path.exists():
+                try:
+                    pid = int(pid_path.read_text().strip())
+                    os.kill(pid, signal.SIGTERM)
+                    print(f"Stopped daemon (PID {pid})")
+                except ProcessLookupError:
+                    print(f"Daemon not running (PID not found)")
+                except Exception as e:
+                    print(f"Error stopping daemon: {e}")
+                pid_path.unlink(missing_ok=True)
+            else:
+                print("No daemon running")
+            return
+
+        # --daemon: spawn hidden background process
+        if pid_path.exists():
+            try:
+                old_pid = int(pid_path.read_text().strip())
+                os.kill(old_pid, 0)
+                print(f"Daemon already running (PID {old_pid})")
+                return
+            except (ProcessLookupError, ValueError):
+                pid_path.unlink(missing_ok=True)
+
+        import subprocess
+        cmd = [sys.executable, "-m", "capsule.daemon", "--_bg"]
+        for p in args.paths:
+            cmd.append(p)
+        cmd.extend(["--idle", str(args.idle)])
+
+        startupinfo = None
+        if os.name == "nt":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            startupinfo=startupinfo,
+            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+        )
+        pid_path.write_text(str(proc.pid))
+        print(f"Daemon started (PID {proc.pid})")
+        return
+
+    if getattr(args, "_bg", False):
+        # Internal: run watcher in background (spawned by --daemon)
+        watch(args.paths, idle=args.idle, once=False)
         return
 
     watch(args.paths, idle=args.idle, once=args.once)
