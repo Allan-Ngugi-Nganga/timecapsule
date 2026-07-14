@@ -1,5 +1,7 @@
 <h1 align="center">timecapsule</h1>
 <p align="center">
+  <img src="timecapsule_demo.svg" alt="timecapsule timeline browser" width="800">
+  <br>
   <em>A git-like filesystem that automatically creates narrative commits.</em>
   <br>
   <br>
