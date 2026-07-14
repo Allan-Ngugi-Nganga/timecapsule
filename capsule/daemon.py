@@ -62,13 +62,52 @@ def _snapshot_callback(filepath: str):
         print(f"[snapshot] {os.path.basename(filepath)} › {message[:60]}...", flush=True)
 
 
-def watch(paths: list[str], idle: int = IDLE_SECONDS, foreground: bool = True, once: bool = False):
+def _rename_callback(old_path: str, new_path: str):
+    """Called when a file is renamed/moved.
+    Continues the snapshot history on the same branch.
+    """
+    from .narrator import generate_message as gen_msg
+
+    store = TimelineStore()
+    repo = git_ops.ensure_repo()
+
+    old_name = os.path.basename(old_path)
+    new_name = os.path.basename(new_path)
+    message = f"Renamed {old_name} to {new_name}"
+
+    if os.path.isfile(new_path):
+        with open(new_path, "rb") as f:
+            current_content = f.read().decode("utf-8", errors="replace")
+
+        # Try to get previous message from the OLD branch
+        old_branch = git_ops._branch_name(old_path)
+        previous_message = None
+        try:
+            commits = list(repo.iter_commits(old_branch, max_count=1))
+            if commits:
+                previous_message = commits[0].message.strip()
+        except Exception:
+            pass
+
+        narrative = gen_msg(
+            filepath=new_path,
+            current_content=current_content,
+            previous_content=None,
+            previous_message=previous_message,
+        )
+        message = f"{message} — {narrative}"
+
+        branch = git_ops._branch_name(new_path)
+        hexsha = git_ops.snapshot_file(new_path, message, repo)
+        if hexsha:
+            store.record_snapshot(new_path, hexsha, message, branch)
+            print(f"[rename] {old_name} → {new_name}", flush=True)
     """Start the file watcher and run until interrupted."""
     print(f"🕰️  timecapsule watching: {', '.join(paths)}")
     print(f"   idle threshold: {idle}s | snapshots: ~/.capsule/timecapsule")
     print(f"   press Ctrl+C to stop\n")
 
-    watcher = FileWatcher(paths, _snapshot_callback, idle_seconds=idle)
+    watcher = FileWatcher(paths, _snapshot_callback, rename_callback=_rename_callback, idle_seconds=idle)
 
     def _handle_signal(sig, frame):
         watcher.stop()
