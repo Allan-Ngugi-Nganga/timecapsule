@@ -154,6 +154,41 @@ def get_file_at_commit(filepath: str, commit_hexsha: str, repo: git.Repo) -> Opt
         return None
 
 
+def migrate_branch(old_branch: str, new_branch: str):
+    """Rename a branch in the timecapsule bare repo, preserving all history.
+
+    When a file is renamed, we want its old snapshot history to carry over
+    to the new branch name. This renames the old branch to the new one,
+    and deletes the old ref. If the new branch already exists (e.g. a later
+    snapshot was already committed under the new name), this does nothing.
+    """
+    if old_branch == new_branch:
+        return
+    # Check if old branch exists
+    try:
+        _git("rev-parse", "--verify", f"refs/heads/{old_branch}")
+    except RuntimeError:
+        return  # nothing to migrate
+    # If new branch already exists, skip rename (it already has history)
+    try:
+        _git("rev-parse", "--verify", f"refs/heads/{new_branch}")
+        # New branch exists — just delete the old one to clean up
+        _git("update-ref", "-d", f"refs/heads/{old_branch}")
+        return
+    except RuntimeError:
+        pass
+    # Rename old → new
+    _git("branch", "-m", old_branch, new_branch)
+
+
+def delete_branch(branch: str):
+    """Delete a branch ref from the timecapsule repo."""
+    try:
+        _git("update-ref", "-d", f"refs/heads/{branch}")
+    except RuntimeError:
+        pass
+
+
 def list_tracked_files(repo: git.Repo) -> list[str]:
     """List all files that have been snapshot (by their branch names)."""
     refs = repo.git.for_each_ref("refs/heads/", format="%(refname:short)").splitlines()

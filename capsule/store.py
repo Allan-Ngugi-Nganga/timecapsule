@@ -113,6 +113,24 @@ class TimelineStore:
         conn.close()
         return count
 
+    def migrate_filepath(self, old_path: str, new_path: str, new_branch: str):
+        """Migrate all snapshots from an old filepath to a new one.
+
+        Called when a file is renamed. Updates the filepath and branch
+        fields for all snapshots that belong to the old path, so the
+        timeline browser shows the full history under the new name.
+        """
+        old_norm = os.path.normpath(old_path)
+        new_norm = os.path.normpath(new_path)
+        with self._lock:
+            conn = sqlite3.connect(self._db_path)
+            conn.execute(
+                "UPDATE snapshots SET filepath = ?, branch = ? WHERE filepath = ?",
+                (new_norm, new_branch, old_norm),
+            )
+            conn.commit()
+            conn.close()
+
     def close(self):
         if hasattr(self._local, "conn") and self._local.conn:
             self._local.conn.close()
